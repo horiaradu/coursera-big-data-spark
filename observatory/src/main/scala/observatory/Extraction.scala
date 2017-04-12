@@ -4,7 +4,6 @@ import java.nio.file.Paths
 import java.time.LocalDate
 
 import org.apache.spark.sql.types._
-import util.SparkJob
 
 /**
   * 1st milestone: data extraction
@@ -30,8 +29,8 @@ object Extraction extends SparkJob {
       .csv(fsPath(temperaturesFile))
       .select(
         concat_ws("~", coalesce('_c0, lit("")), '_c1).alias("id"),
-        '_c2.alias("day").cast(IntegerType),
-        '_c3.alias("month").cast(IntegerType),
+        '_c3.alias("day").cast(IntegerType),
+        '_c2.alias("month").cast(IntegerType),
         lit(year).as("year"),
         (('_c4 - 32) * 5 / 9).alias("temperature").cast(DoubleType)
       )
@@ -50,11 +49,14 @@ object Extraction extends SparkJob {
     val temperaturesDS = temperatures(year, temperaturesFile)
     stationsDS.join(temperaturesDS, usingColumn = "id")
       .map(row => (
-        LocalDate.of(row(3).asInstanceOf[Int], row(4).asInstanceOf[Int], row(5).asInstanceOf[Int]),
-        Location(row(1).asInstanceOf[Double], row(2).asInstanceOf[Double]),
-        row(6).asInstanceOf[Double]
+        TemperatureDate(row.getAs[Int]("day"), row.getAs[Int]("month"), row.getAs[Int]("year")),
+        Location(row.getAs[Double]("latitude"), row.getAs[Double]("longitude")),
+        row.getAs[Double]("temperature")
       ))
       .collect
+      .par
+      .map(e => (LocalDate.of(e._1.year, e._1.month, e._1.day), e._2, e._3))
+      .seq
   }
 
   /**
@@ -62,7 +64,19 @@ object Extraction extends SparkJob {
     * @return A sequence containing, for each location, the average temperature over the year.
     */
   def locationYearlyAverageRecords(records: Iterable[(LocalDate, Location, Double)]): Iterable[(Location, Double)] = {
-    ???
+    records.par
+      .groupBy(_._2)
+      .mapValues(temps => {
+        val result = temps.aggregate((0.0, 0))(
+          {
+            case ((sum, count), (_, _, degrees)) => (sum + degrees, count + 1)
+          }, {
+            case ((s1, c1), (s2, c2)) => (s1 + s2, c1 + c2)
+          }
+        )
+        result._1 / result._2
+      })
+      .seq
   }
 
   def fsPath(resource: String): String =

@@ -1,4 +1,4 @@
-package util
+package observatory
 
 import org.apache.spark.sql.SparkSession
 

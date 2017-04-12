@@ -6,7 +6,6 @@ import org.apache.spark.sql.{DataFrame, Dataset}
 import org.junit.runner.RunWith
 import org.scalatest.FunSuite
 import org.scalatest.junit.JUnitRunner
-import util.SparkJob
 
 @RunWith(classOf[JUnitRunner])
 class ExtractionTest extends FunSuite with SparkJob {
@@ -17,6 +16,7 @@ class ExtractionTest extends FunSuite with SparkJob {
   lazy val stations: Dataset[Station] = Extraction.stations(stationsPath).persist
   lazy val temperatures: Dataset[TemperatureRecord] = Extraction.temperatures(year, temperaturePath).persist
   lazy val locateTemperatures: Iterable[(LocalDate, Location, Double)] = Extraction.locateTemperatures(year, stationsPath, temperaturePath)
+  lazy val locateAverage: Iterable[(Location, Double)] = Extraction.locationYearlyAverageRecords(locateTemperatures)
 
   test("stations") {
     stations.show()
@@ -38,6 +38,12 @@ class ExtractionTest extends FunSuite with SparkJob {
     locateTemperatures.take(20).foreach(println)
     assert(locateTemperatures.count(_._2 == Location(70.933, -8.667)) === 363)
     assert(locateTemperatures.size === 2176493)
+  }
+
+  test("locationYearlyAverageRecords") {
+    locateAverage.take(20).foreach(println)
+    assert(locateAverage.count(_._1 == Location(70.933, -8.667)) === 1)
+    assert(locateAverage.size === 8251)
   }
 
 }
